@@ -6,7 +6,7 @@
   so they still connect from line to line.
 - Powerline extra glyphs that were ~1.7 cells wide are fit into one cell.
 - Missing symbols are added from monofoki, so terminals don't fall back to wide fonts.
-- A few more shapes (◎ ◆ ◇ ◌ ...) are derived from ● and ■.
+- A few more shapes (◎ ◆ ◇ ◌ ⚠ ...) are derived from ●, ■ and !.
 - Operators, arrows, bullets and shapes are centred vertically in the cell.
 OpenType features are added afterwards by build.sh (FontForge cannot parse our features.fea).
 """
@@ -142,6 +142,22 @@ def add_derived_shapes(font):
         part.transform(psMat.translate((r - ring_w) * math.cos(a), (r - ring_w) * math.sin(a)))
         dot += part
     new[0x25CC] = dot
+    # ⚠: filled triangle with ! knocked out, so bare U+26A0 does not fall back to a wide font
+    tri = fontforge.contour()
+    tri.moveTo(20, 0)
+    tri.lineTo(WIDTH / 2, 0.866 * (WIDTH - 40))
+    tri.lineTo(WIDTH - 20, 0)
+    tri.closed = True
+    warn = fontforge.layer()
+    warn += tri
+    excl = by_u[0x21].foreground
+    x0, y0, x1, y1 = by_u[0x21].boundingBox()
+    excl.transform(psMat.compose(psMat.translate(-(x0 + x1) / 2, -y0), psMat.compose(psMat.scale(0.45), psMat.translate(cx, 40))))
+    for c in excl:
+        if c.isClockwise() == tri.isClockwise():
+            c.reverseDirection()
+        warn += c
+    new[0x26A0] = warn
     for u, layer in new.items():
         if u not in by_u:
             g = font.createChar(u, f"uni{u:04X}")
