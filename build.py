@@ -158,6 +158,93 @@ def add_derived_shapes(font):
             c.reverseDirection()
         warn += c
     new[0x26A0] = warn
+    # Clocks and hourglasses: bare code points otherwise fall back to a (wide) emoji font.
+    # ⏰ ⌛ ⏳ are East Asian Wide, so terminals still give them two cells; these only keep them in style.
+    face = d * 0.8
+    outer_cw = shape(0x25CF, face, False, ring_w)[0].isClockwise()
+    top = cy + face / 2
+
+    def poly(pts, angle=0, hole=False):
+        """Closed polygon wound like an outer contour (or a hole), rotated by `angle` degrees about the centre."""
+        c = fontforge.contour()
+        c.moveTo(*pts[0])
+        for p in pts[1:]:
+            c.lineTo(*p)
+        c.closed = True
+        if (c.isClockwise() != outer_cw) != hole:
+            c.reverseDirection()
+        c.transform(psMat.compose(psMat.translate(-cx, -cy), psMat.compose(psMat.rotate(math.radians(angle)), psMat.translate(cx, cy))))
+        return c
+
+    def bar(x0, y0, x1, y1, angle=0):
+        return poly([(x0, y0), (x0, y1), (x1, y1), (x1, y0)], angle)
+
+    def hand(length, angle):  # from the centre, angle clockwise from 12 o'clock
+        return bar(cx - ring_w / 2, cy - ring_w / 2, cx + ring_w / 2, cy + length, -angle)
+
+    def dial(dy=0):
+        layer = shape(0x25CF, face, False, ring_w)
+        layer.transform(psMat.translate(0, dy))
+        return layer
+
+    watch = dial()  # ⏱: crown and a hand at ~1 o'clock
+    watch += bar(cx - face * 0.12, top - ring_w / 2, cx + face * 0.12, top + ring_w * 1.5)
+    watch += hand(face / 2 - ring_w * 2.5, 35)
+    new[0x23F1] = watch
+
+    timer = dial()  # ⏲: small knob, ticks at 12/3/6/9 and a hand at ~10 o'clock
+    timer += bar(cx - ring_w / 2, top - ring_w / 2, cx + ring_w / 2, top + ring_w * 1.5)
+    for a in (0, 90, 180, 270):
+        timer += bar(cx - ring_w / 2, top - ring_w * 2.2, cx + ring_w / 2, top - ring_w / 2, a)
+    timer += hand(face / 2 - ring_w * 2.5, -60)
+    new[0x23F2] = timer
+
+    lift = ring_w  # ⏰: dial lifted to make room for the legs, two bells, legs, hands at 12 and 3
+    alarm = dial(lift)
+    for side in (-1, 1):
+        bell = shape(0x25CF, face * 0.38)
+        a = math.radians(side * 45)
+        bell.transform(psMat.translate((face / 2) * math.sin(a), lift + (face / 2) * math.cos(a)))
+        alarm += bell
+        foot = bar(cx - ring_w / 2, cy - face / 2 - ring_w, cx + ring_w / 2, cy - face / 2 + ring_w, side * 40)
+        foot.transform(psMat.translate(0, lift))
+        alarm += foot
+    for length, a in ((face / 2 - ring_w * 2.5, 0), (face / 2 - ring_w * 3.5, 90)):
+        h = hand(length, a)
+        h.transform(psMat.translate(0, lift))
+        alarm += h
+    new[0x23F0] = alarm
+
+    hw, hh, bw, neck = WIDTH / 2 - 90, d * 0.62, 50, 12  # hourglass half width/height, bar thickness, tip overlap
+    upper = [(cx - hw + 25, cy + hh - bw), (cx + hw - 25, cy + hh - bw), (cx, cy - neck)]
+    lower = [(cx - hw + 25, cy - hh + bw), (cx + hw - 25, cy - hh + bw), (cx, cy + neck)]
+
+    def hollow(pts, t):
+        """Triangle outline of stroke `t`: the outer triangle plus itself shrunk about its incentre as a hole."""
+        a, b, c = (math.dist(pts[(i + 1) % 3], pts[(i + 2) % 3]) for i in range(3))
+        ix, iy = ((a * pts[0][j] + b * pts[1][j] + c * pts[2][j]) / (a + b + c) for j in (0, 1))
+        area = abs((pts[1][0] - pts[0][0]) * (pts[2][1] - pts[0][1]) - (pts[2][0] - pts[0][0]) * (pts[1][1] - pts[0][1])) / 2
+        k = 1 - t / (2 * area / (a + b + c))
+        return [poly(pts), poly([(ix + (x - ix) * k, iy + (y - iy) * k) for x, y in pts], hole=True)]
+
+    def hourglass():
+        layer = fontforge.layer()
+        layer += bar(cx - hw, cy + hh - bw, cx + hw, cy + hh)
+        layer += bar(cx - hw, cy - hh, cx + hw, cy - hh + bw)
+        return layer
+
+    done = hourglass()  # ⌛: classic solid hourglass
+    done += poly(upper)
+    done += poly(lower)
+    new[0x231B] = done
+
+    flowing = hourglass()  # ⏳: outline, a little sand left on top, a pile at the bottom
+    for c in hollow(upper, ring_w) + hollow(lower, ring_w):
+        flowing += c
+    s = hw * 0.35
+    flowing += poly([(cx - s, cy + s * 0.9), (cx + s, cy + s * 0.9), (cx, cy)])
+    flowing += poly([(cx - hw * 0.6, cy - hh + bw), (cx + hw * 0.6, cy - hh + bw), (cx, cy - hh + bw + hw * 0.5)])
+    new[0x23F3] = flowing
     for u, layer in new.items():
         if u not in by_u:
             g = font.createChar(u, f"uni{u:04X}")
