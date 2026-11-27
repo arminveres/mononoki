@@ -31,6 +31,8 @@ for style, src in [("Regular", "Regular"), ("Italic", "Italic"), ("Bold", "Bold"
         for ch in "xHdgO":
             assert abs(bounds(font, ch)[1] - bounds(regular, ch)[1]) <= 2, (path, ch)
             assert abs(bounds(font, ch)[3] - bounds(regular, ch)[3]) <= 2, (path, ch)
+        for ch in "◧◨◩◪⬒⬓⬔⬕":  # half-filled squares match ■ □ (loading bars)
+            assert all(abs(a - b) <= 2 for a, b in zip(bounds(font, ch), bounds(font, "□"))), (path, ch)
 PY
 
 for f in export/mononoki-*.ttf; do

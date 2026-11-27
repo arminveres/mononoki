@@ -245,6 +245,38 @@ def add_derived_shapes(font):
     flowing += poly([(cx - s, cy + s * 0.9), (cx + s, cy + s * 0.9), (cx, cy)])
     flowing += poly([(cx - hw * 0.6, cy - hh + bw), (cx + hw * 0.6, cy - hh + bw), (cx, cy - hh + bw + hw * 0.5)])
     new[0x23F3] = flowing
+
+    # ◧ ◨ ◩ ◪ ⬒ ⬓ ⬔ ⬕: □ with half its hole filled, so spinners like ■◧□ keep one size (fallback fonts differ)
+    slant = math.radians(font.italicangle)
+    box = by_u[0x25A1].foreground
+    box.transform(psMat.skew(slant))  # upright, so the fill is a plain rectangle/triangle
+    outer = max(box, key=lambda c: c.boundingBox()[2] - c.boundingBox()[0])
+    hole = min(box, key=lambda c: c.boundingBox()[2] - c.boundingBox()[0])
+    x0, y0, x1, y1 = hole.boundingBox()
+    o = 5  # overlap into the frame, so removeOverlap leaves no hairline
+    x0, y0, x1, y1, xm, ym = x0 - o, y0 - o, x1 + o, y1 + o, (x0 + x1) / 2, (y0 + y1) / 2
+    halves = {
+        0x25E7: [(x0, y0), (x0, y1), (xm, y1), (xm, y0)],  # ◧ left
+        0x25E8: [(xm, y0), (xm, y1), (x1, y1), (x1, y0)],  # ◨ right
+        0x2B12: [(x0, ym), (x0, y1), (x1, y1), (x1, ym)],  # ⬒ top
+        0x2B13: [(x0, y0), (x0, ym), (x1, ym), (x1, y0)],  # ⬓ bottom
+        0x25E9: [(x0, y0), (x0, y1), (x1, y1)],  # ◩ upper left
+        0x25EA: [(x0, y0), (x1, y1), (x1, y0)],  # ◪ lower right
+        0x2B14: [(x0, y1), (x1, y1), (x1, y0)],  # ⬔ upper right
+        0x2B15: [(x0, y0), (x0, y1), (x1, y0)],  # ⬕ lower left
+    }
+    for u, pts in halves.items():
+        fill = fontforge.contour()
+        fill.moveTo(*pts[0])
+        for p in pts[1:]:
+            fill.lineTo(*p)
+        fill.closed = True
+        if fill.isClockwise() != outer.isClockwise():
+            fill.reverseDirection()
+        layer = box.dup()  # `layer += contour` shares the contour, so don't reuse box itself
+        layer += fill
+        layer.transform(psMat.skew(-slant))
+        new[u] = layer
     for u, layer in new.items():
         if u not in by_u:
             g = font.createChar(u, f"uni{u:04X}")
