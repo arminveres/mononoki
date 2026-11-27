@@ -246,6 +246,9 @@ def add_derived_shapes(font):
     flowing += poly([(cx - hw * 0.6, cy - hh + bw), (cx + hw * 0.6, cy - hh + bw), (cx, cy - hh + bw + hw * 0.5)])
     new[0x23F3] = flowing
 
+    pw, gap = 90, 70  # ⏸: two bars (bare code point falls back to a wide emoji font)
+    new[0x23F8] = bar(cx - gap / 2 - pw, cy - face / 2, cx - gap / 2, cy + face / 2) + bar(cx + gap / 2, cy - face / 2, cx + gap / 2 + pw, cy + face / 2)
+
     # ◧ ◨ ◩ ◪ ⬒ ⬓ ⬔ ⬕: □ with half its hole filled, so spinners like ■◧□ keep one size (fallback fonts differ)
     slant = math.radians(font.italicangle)
     box = by_u[0x25A1].foreground
